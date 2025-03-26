@@ -59,7 +59,7 @@ filetype==1.2.0
 flatbuffers==24.12.23
 frozenlist==1.5.0
 fsspec==2024.12.0
-google-ai-generativelanguage==0.6.15
+google-ai-generativelanguage==0.6.17
 google-api-core==2.24.0
 google-api-python-client==2.164.0
 google-auth==2.37.0
@@ -70,7 +70,6 @@ google-cloud-core==2.4.1
 google-cloud-resource-manager==1.14.0
 google-cloud-storage==2.19.0
 google-crc32c==1.6.0
-google-generativeai==0.8.5
 google-resumable-media==2.7.2
 googleapis-common-protos==1.66.0
 gptcache==0.1.44
