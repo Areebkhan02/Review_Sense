@@ -4,8 +4,14 @@ from agents.review_fetcher_agent import ReviewFetcherAgent
 from agents.sentiment_analysis_agent import SentimentAnalysisAgent
 from agents.response_generator_agent import ResponseGeneratorAgent
 from agents.whatsapp_agent import WhatsAppAgent
+from dotenv import load_dotenv
 
 # Set up Gemini API key
+
+
+# Load environment variables
+load_dotenv()
+
 
 # Initialize the LLM
 my_llm = LLM(
