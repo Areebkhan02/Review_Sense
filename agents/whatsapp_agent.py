@@ -31,6 +31,7 @@ class WhatsAppAgent:
         self.current_indices = {}
         self.review_states = {}
         self.user_memories = {}
+        self.last_command = {}
         
         # Create the WhatsApp agent
         self.whatsapp_agent = Agent(
@@ -169,36 +170,35 @@ class WhatsAppAgent:
                     return "COMMAND:CONTINUE_REVIEWS"
                 
                 # Number-based response system
-                elif "Approve" in message_text:
+                elif "approve" in message_lower:
                     # Option 1: Approve and move to next review
                     reviews = self.review_data[user_id].get('analyzed_reviews', [])
                     current_idx = self.current_indices.get(user_id, 0)
                     
                     if current_idx < len(reviews):
                         reviews[current_idx]['approval_status'] = 'approved'
+                        self.last_command[user_id] = 'approve'
                         return "APPROVED:NEXT_REVIEW"
                 
-                elif any(word in message_lower for word in ["feedback", "please"]):
-                    # Option 2: Request revision with feedback
+                # If last command was feedback request, treat this message as feedback
+                elif self.last_command.get(user_id) == 'feedback':
                     reviews = self.review_data[user_id].get('analyzed_reviews', [])
                     current_idx = self.current_indices.get(user_id, 0)
                     
                     if current_idx < len(reviews):
-                        # Extract feedback - remove the "2" and any common phrases
-                        feedback = message_text.replace("2", "").strip()
-                        
-                        # If they just sent "2" without feedback, ask for it
-                        if not feedback or len(feedback) < 10:
-                            return "FEEDBACK_NEEDED:Please provide specific feedback on what changes you'd like to make to the response."
-                        
-                        # Store feedback and mark for revision
                         reviews[current_idx]['approval_status'] = 'needs_revision'
-                        reviews[current_idx]['manager_feedback'] = feedback
-                        return f"REVISION:{feedback}"
+                        reviews[current_idx]['manager_feedback'] = message_text
+                        self.last_command[user_id] = None  # Reset the last command
+                        return f"REVISION:{message_text}"
+                
+                elif any(cmd in message_lower for cmd in ['feedback', 'please']):
+                    # Mark that we're expecting feedback next
+                    self.last_command[user_id] = 'feedback'
+                    return "FEEDBACK_NEEDED:Please provide specific feedback on what changes you'd like to make to the response."
                 
                 else:
-                    # Unclear response, remind of number options
-                    return "UNCLEAR:Please use the number options: Reply with '1' to approve or '2' followed by your feedback to request changes."
+                    # Unclear response, remind of structured interaction options
+                    return "UNCLEAR:Oops! I couldn't understand your previous command 🤔\n\nWhile in review mode, please use:\n• 'Approve' to accept\n• 'Feedback' to suggest changes\n• 'Agent advice' if you'd like personalized insights on restaurant management\n• 'Fetch reviews' for new reviews"
             
             # Default to conversation mode if no active review session and no specific command
             return f"CONVERSATION:{message_text}"
