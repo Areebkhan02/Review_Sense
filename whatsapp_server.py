@@ -284,7 +284,7 @@ async def whatsapp_webhook(
     elif intent_response.startswith("CONVERSATION:"): 
         # Get your content SID from the successfully created template
         restaurant_advisor_template_sid = "HX48b4234fbf7194f89b540dbe648585de"
-        manager_name = "Areeb"
+        manager_name = "[Business Owner]"
         
         # Try to send the template message with buttons
         try:
