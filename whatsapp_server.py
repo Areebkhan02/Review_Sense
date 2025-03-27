@@ -7,7 +7,7 @@ from twilio.request_validator import RequestValidator
 from dotenv import load_dotenv
 import sys
 import time
-#from custom.MongoDB.mongodb_client import MongoDB
+from custom.MongoDB.mongodb_client import MongoDB
 from custom.functions.helper_functions import filter_reviews_by_rating
 
 # Add project root to path for imports
@@ -34,7 +34,7 @@ my_llm = LLM(
 )
 
 # Initialize the MongoDB client
-#db = MongoDB()
+db = MongoDB()
 
 # Initialize the WhatsApp agent - this is PERSISTENT across requests
 whatsapp_system = WhatsAppAgent(my_llm)
@@ -203,14 +203,14 @@ async def whatsapp_webhook(
                     variables={}
                 )
 
-                # # Save the review data to MongoDB
-                # result_update = db.update_review_response(
-                #     restaurant_name=RESTAURANT_NAME,
-                #     author=reviews[current_idx]['author'],
-                #     text_prefix=reviews[current_idx]['text'],
-                #     response=revised_response
-                # )
-                # print(f"MongoDB update result: {result_update}")
+                # Save the review data to MongoDB
+                result_update = db.update_review_response(
+                    restaurant_name=RESTAURANT_NAME,
+                    author=reviews[current_idx]['author'],
+                    text_prefix=reviews[current_idx]['text'],
+                    response=revised_response
+                )
+                print(f"MongoDB update result: {result_update}")
             except Exception as e:
                 # Error handling...
                 pass
@@ -419,10 +419,10 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
             variables=template_variables
         )
 
-        # # Save the review data to MongoDB
-        # db_result = db.save_reviews(restaurant_name, reviews_original)
-        # print(f"MongoDB save result: {db_result}")
-        # print(f"Saved {db_result.get('saved_reviews', 0)} reviews to database")
+        # Save the review data to MongoDB
+        db_result = db.save_reviews(restaurant_name, reviews_original)
+        print(f"MongoDB save result: {db_result}")
+        print(f"Saved {db_result.get('saved_reviews', 0)} reviews to database")
         
     except Exception as e:
         logger.error(f"Error in fetch_reviews_background: {str(e)}")
