@@ -64,6 +64,13 @@ class ReviewFetcherAgent:
             # Try all possible Chrome binary locations
             chrome_options.binary_location = "/usr/bin/chromium-browser"  # This should be correct based on apt install
             
+            # Additional options for Railway
+            chrome_options.add_argument("--disable-infobars")
+            chrome_options.add_argument("--disable-browser-side-navigation")
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--single-process")
+            
             driver = None
             print(f"Initializing Chrome driver")
             try:
