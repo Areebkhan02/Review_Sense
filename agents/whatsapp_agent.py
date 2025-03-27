@@ -198,7 +198,7 @@ class WhatsAppAgent:
                 
                 else:
                     # Unclear response, remind of structured interaction options
-                    return "UNCLEAR:Oops! I couldn't understand your previous command 🤔\n\nWhile in review mode, please use:\n• 'Approve' to accept\n• 'Feedback' to suggest changes\n• 'Agent advice' if you'd like personalized insights on restaurant management\n• 'Fetch reviews' for new reviews"
+                    return "UNCLEAR:Oops! I couldn't understand your previous command 🤔\n\nWhile in review mode, please use:\n• 'Approve' to accept\n• 'Feedback' to suggest changes\n• 'Fetch reviews' for new reviews"
             
             # Default to conversation mode if no active review session and no specific command
             return f"CONVERSATION:{message_text}"
