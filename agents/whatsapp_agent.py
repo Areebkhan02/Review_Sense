@@ -163,8 +163,8 @@ class WhatsAppAgent:
                     self.current_indices[user_id] = current_idx + 1
                     return "COMMAND:NEXT_REVIEW"
                 
-                elif any(cmd in message_lower for cmd in ['summary']):
-                    return "COMMAND:SHOW_SUMMARY"
+                # elif any(cmd in message_lower for cmd in ['summary']):
+                #     return "COMMAND:SHOW_SUMMARY"
                 
                 elif any(cmd in message_lower for cmd in ['continue', 'start']) and (len(message_lower) < 10):
                     return "COMMAND:CONTINUE_REVIEWS"
