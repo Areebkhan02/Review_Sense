@@ -61,11 +61,24 @@ class ReviewFetcherAgent:
             driver = None
             print(f"Initializing Chrome driver")
             try:
-                # Initialize the driver
-                print(f"Initializing Chrome driver x 2")
-                # Use webdriver_manager to handle ChromeDriver installation and versioning
-                service = Service(ChromeDriverManager().install())
-                print(f"Initializing Chrome driver x 3")
+                # CHANGED: Skip WebDriverManager and use system ChromeDriver directly
+                print("Using system ChromeDriver instead of WebDriverManager")
+                
+                # Debug information
+                import subprocess
+                try:
+                    print("Checking Chromium installation:")
+                    result = subprocess.run(["ls", "-la", "/usr/bin/chromium*"], shell=True, capture_output=True, text=True)
+                    print(result.stdout)
+                    
+                    print("Checking ChromeDriver installation:")
+                    result = subprocess.run(["ls", "-la", "/usr/bin/chromedriver*"], shell=True, capture_output=True, text=True)
+                    print(result.stdout)
+                except Exception as e:
+                    print(f"Checking installations failed: {e}")
+                
+                # Try direct path to ChromeDriver
+                service = Service("/usr/bin/chromedriver")
                 driver = webdriver.Chrome(service=service, options=chrome_options)
                 
                 # Search for the restaurant on Google Maps directly
