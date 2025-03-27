@@ -50,36 +50,77 @@ class ReviewFetcherAgent:
             print(f"Setting up Chrome options for {restaurant_name}")
             chrome_options = Options()
             chrome_options.add_argument("--headless")
-            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--no-sandbox")  # Critical for running in containers
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--window-size=1920,1080")
             chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
-            #addition for production environment
-            chrome_options.binary_location = "/usr/bin/chromium-browser"
+            
+            # CRITICAL: Add these additional flags to make ChromeDriver work in Railway
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--disable-setuid-sandbox")
+            chrome_options.add_argument("--remote-debugging-port=9222")
+            
+            # Try all possible Chrome binary locations
+            chrome_options.binary_location = "/usr/bin/chromium-browser"  # This should be correct based on apt install
             
             driver = None
             print(f"Initializing Chrome driver")
             try:
-                # CHANGED: Skip WebDriverManager and use system ChromeDriver directly
-                print("Using system ChromeDriver instead of WebDriverManager")
-                
-                # Debug information
+                # Debug ChromeDriver
                 import subprocess
-                try:
-                    print("Checking Chromium installation:")
-                    result = subprocess.run(["ls", "-la", "/usr/bin/chromium*"], shell=True, capture_output=True, text=True)
-                    print("Chromium installation result: ", result.stdout)
-                    
-                    print("Checking ChromeDriver installation:")
-                    result = subprocess.run(["ls", "-la", "/usr/bin/chromedriver*"], shell=True, capture_output=True, text=True)
-                    print("ChromeDriver installation result: ", result.stdout)
-                except Exception as e:
-                    print(f"Checking installations failed: {e}")
+                import os
                 
-                # Try direct path to ChromeDriver
-                service = Service("/usr/bin/chromedriver")
-                driver = webdriver.Chrome(service=service, options=chrome_options)
+                print("Checking ChromeDriver executable status:")
+                try:
+                    result = subprocess.run(["ls", "-la", "/usr/bin/chromedriver"], 
+                                           shell=False, capture_output=True, text=True)
+                    print(f"ChromeDriver details: {result.stdout}")
+                    
+                    # Check if executable
+                    is_executable = os.access("/usr/bin/chromedriver", os.X_OK)
+                    print(f"ChromeDriver is executable: {is_executable}")
+                    
+                    # Try getting version directly
+                    try:
+                        ver_result = subprocess.run(["/usr/bin/chromedriver", "--version"], 
+                                                  shell=False, capture_output=True, text=True, timeout=5)
+                        print(f"ChromeDriver version: {ver_result.stdout}")
+                    except Exception as e:
+                        print(f"Could not get ChromeDriver version: {e}")
+                except Exception as e:
+                    print(f"Error checking ChromeDriver: {e}")
+                
+                # MODIFIED: Try multiple initialization approaches
+                try:
+                    print("Attempt 1: Using standard Service approach with explicit path")
+                    service = Service(executable_path="/usr/bin/chromedriver")
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                except Exception as e1:
+                    print(f"First attempt failed: {e1}")
+                    
+                    try:
+                        print("Attempt 2: Using direct initialization without Service object")
+                        # Old-style initialization as fallback
+                        driver = webdriver.Chrome(options=chrome_options)
+                    except Exception as e2:
+                        print(f"Second attempt failed: {e2}")
+                        
+                        # Final attempt with environment variable
+                        try:
+                            print("Attempt 3: Setting environment variable and trying again")
+                            os.environ["CHROME_DRIVER_PATH"] = "/usr/bin/chromedriver"
+                            os.environ["CHROMIUM_BROWSER_PATH"] = "/usr/bin/chromium-browser"
+                            driver = webdriver.Chrome(options=chrome_options)
+                        except Exception as e3:
+                            print(f"All ChromeDriver initialization attempts failed")
+                            # Return a graceful error instead of failing completely
+                            return json.dumps({
+                                'status': 'error',
+                                'message': f"Could not initialize ChromeDriver after multiple attempts: {e1}; {e2}; {e3}",
+                                'restaurant_name': restaurant_name,
+                                'reviews': []
+                            })
                 
                 # Search for the restaurant on Google Maps directly
                 print(f"Searching for: {restaurant_name}")
