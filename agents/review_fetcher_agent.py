@@ -55,6 +55,8 @@ class ReviewFetcherAgent:
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--window-size=1920,1080")
             chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
+            #addition for production environment
+            chrome_options.binary_location = "/usr/bin/chromium-browser"
             
             driver = None
             print(f"Initializing Chrome driver")
@@ -63,6 +65,7 @@ class ReviewFetcherAgent:
                 print(f"Initializing Chrome driver x 2")
                 # Use webdriver_manager to handle ChromeDriver installation and versioning
                 service = Service(ChromeDriverManager().install())
+                print(f"Initializing Chrome driver x 3")
                 driver = webdriver.Chrome(service=service, options=chrome_options)
                 
                 # Search for the restaurant on Google Maps directly

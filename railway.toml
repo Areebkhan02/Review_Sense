@@ -1,0 +1,8 @@
+   [build]
+   builder = "nixpacks"
+
+   [deploy]
+   startCommand = "uvicorn whatsapp_server:app --host 0.0.0.0 --port $PORT"
+
+   [nixpacks]
+   apt = ["chromium-browser", "chromium-driver", "libgconf-2-4", "libnss3"]
