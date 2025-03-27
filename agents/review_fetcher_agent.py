@@ -69,11 +69,11 @@ class ReviewFetcherAgent:
                 try:
                     print("Checking Chromium installation:")
                     result = subprocess.run(["ls", "-la", "/usr/bin/chromium*"], shell=True, capture_output=True, text=True)
-                    print(result.stdout)
+                    print("Chromium installation result: ", result.stdout)
                     
                     print("Checking ChromeDriver installation:")
                     result = subprocess.run(["ls", "-la", "/usr/bin/chromedriver*"], shell=True, capture_output=True, text=True)
-                    print(result.stdout)
+                    print("ChromeDriver installation result: ", result.stdout)
                 except Exception as e:
                     print(f"Checking installations failed: {e}")
                 
