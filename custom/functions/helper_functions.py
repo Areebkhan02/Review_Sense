@@ -40,3 +40,46 @@ def filter_reviews_by_rating(review_data, max_rating=3):
     return filtered_data, removed_count
 
 
+
+def send_restaurant_advisor_template(whatsapp_system, to: str, manager_name: str = "[Business Owner]"):
+    """
+    Send the restaurant advisor template message with buttons to the specified recipient.
+    
+    Args:
+        whatsapp_system: The WhatsApp system instance
+        to: The recipient's phone number (with whatsapp: prefix)
+        manager_name: The name to include in the template (default: "[Business Owner]")
+    
+    Returns:
+        bool: True if template was sent successfully, False otherwise
+    """
+    restaurant_advisor_template_sid = "HX48b4234fbf7194f89b540dbe648585de"
+    
+    # Try to send the template message with buttons
+    try:
+        if restaurant_advisor_template_sid:
+            # Use template tool
+            template_tool = whatsapp_system.whatsapp_agent.tools[5]  # Index 5 for the template tool
+            template_tool.run(
+                to=to,
+                content_sid=restaurant_advisor_template_sid,
+                variables={"1": manager_name}
+            )
+            return True
+        else:
+            # Fallback to regular message if template SID is not configured
+            fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
+            whatsapp_system.whatsapp_agent.tools[0].run(
+                to=to,
+                message=fallback_message
+            )
+            return False
+    except Exception as e:
+        # No logging, just handle the exception silently
+        # Fallback to regular message if template fails
+        fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
+        whatsapp_system.whatsapp_agent.tools[0].run(
+            to=to,
+            message=fallback_message
+        )
+        return False

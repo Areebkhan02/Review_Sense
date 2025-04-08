@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import sys
 import time
 #from custom.MongoDB.mongodb_client import MongoDB
-from custom.functions.helper_functions import filter_reviews_by_rating
+from custom.functions.helper_functions import filter_reviews_by_rating, send_restaurant_advisor_template
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta
@@ -313,35 +313,38 @@ async def whatsapp_webhook(
         )
         
     elif intent_response.startswith("CONVERSATION:"): 
-        # Get your content SID from the successfully created template
-        restaurant_advisor_template_sid = "HX48b4234fbf7194f89b540dbe648585de"
-        manager_name = "[Business Owner]"
+        # # Get your content SID from the successfully created template
+        # restaurant_advisor_template_sid = "HX48b4234fbf7194f89b540dbe648585de"
+        # manager_name = "[Business Owner]"
         
-        # Try to send the template message with buttons
-        try:
-            if restaurant_advisor_template_sid:
-                # Use our new template tool
-                template_tool = whatsapp_system.whatsapp_agent.tools[5]  # Index 5 for the template tool
-                template_tool.run(
-                    to=From,
-                    content_sid=restaurant_advisor_template_sid,
-                    variables={"1": manager_name}
-                )
-            else:
-                # Fallback to regular message if template SID is not configured
-                fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
-                whatsapp_system.whatsapp_agent.tools[0].run(
-                    to=From,
-                    message=fallback_message
-                )
-        except Exception as e:
-            logger.error(f"Error sending template message: {str(e)}")
-            # Fallback to regular message if template fails
-            fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
-            whatsapp_system.whatsapp_agent.tools[0].run(
-                to=From,
-                message=fallback_message
-            )
+        # # Try to send the template message with buttons
+        # try:
+        #     if restaurant_advisor_template_sid:
+        #         # Use our new template tool
+        #         template_tool = whatsapp_system.whatsapp_agent.tools[5]  # Index 5 for the template tool
+        #         template_tool.run(
+        #             to=From,
+        #             content_sid=restaurant_advisor_template_sid,
+        #             variables={"1": manager_name}
+        #         )
+        #     else:
+        #         # Fallback to regular message if template SID is not configured
+        #         fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
+        #         whatsapp_system.whatsapp_agent.tools[0].run(
+        #             to=From,
+        #             message=fallback_message
+        #         )
+        # except Exception as e:
+        #     logger.error(f"Error sending template message: {str(e)}")
+        #     # Fallback to regular message if template fails
+        #     fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
+        #     whatsapp_system.whatsapp_agent.tools[0].run(
+        #         to=From,
+        #         message=fallback_message
+        #     )
+
+        # Send the template message with buttons - added 9th april 2025
+        send_restaurant_advisor_template(whatsapp_system, From)
         
         # Add to memory
         memory = whatsapp_system.get_user_memory(From)
@@ -537,21 +540,30 @@ async def check_and_send_initial_message(manager_phone: str):
     # Only send welcome message if not in an active review session
     if review_state != 'initialized':
         # Send initial message
-        welcome_message = """
-        👋 *Hello! Time for a Review Check*
+
+        # # comment out this placeholder message 9th april 2025
+        # welcome_message = """
+        # 👋 *Hello! Time for a Review Check*
         
-        Would you like to:
-        - Check new reviews
-        - Get a business summary
-        - Get AI advice for your business
+        # Would you like to:
+        # - Check new reviews
+        # - Get a business summary
+        # - Get AI advice for your business
         
-        Choose an option below:
-        """
+        # Choose an option below:
+        # """
         
-        whatsapp_system.whatsapp_agent.tools[0].run(
-            to=formatted_phone,
-            message=welcome_message
-        )
+        # whatsapp_system.whatsapp_agent.tools[0].run(
+        #     to=formatted_phone,
+        #     message=welcome_message
+        # )
+
+        # Try to send the template message with buttons - added 9th april 2025
+        send_restaurant_advisor_template(whatsapp_system, formatted_phone)
+        
+       
+
+
 
 def setup_review_reminder_scheduler():
     """Setup scheduler for checking inactive review sessions"""
