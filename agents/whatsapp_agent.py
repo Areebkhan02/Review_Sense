@@ -32,6 +32,7 @@ class WhatsAppAgent:
         self.review_states = {}
         self.user_memories = {}
         self.last_command = {}
+        self.last_activity = {}
         
         # Create the WhatsApp agent
         self.whatsapp_agent = Agent(
@@ -60,6 +61,33 @@ class WhatsAppAgent:
         if user_id not in self.user_memories:
             self.user_memories[user_id] = ConversationBufferMemory(memory_key="history")
         return self.user_memories[user_id]
+    
+    # Reset review-related state variables for a specific user after review completion. 
+    # This is used to clear the state when the user has completed all reviews.
+    def reset_user_review_state(self, user_id: str) -> None:
+        """
+        Reset review-related state variables for a specific user after review completion.
+        
+        Args:
+            user_id: The user's WhatsApp number to clear state for
+        """
+        logger.info(f"Resetting review state for user: {user_id}")
+        
+        # Clear review session data
+        if user_id in self.review_data:
+            del self.review_data[user_id]
+        
+        if user_id in self.current_indices:
+            del self.current_indices[user_id]
+            
+        if user_id in self.review_states:
+            del self.review_states[user_id]
+            
+        if user_id in self.last_command:
+            del self.last_command[user_id]
+        
+        # We maintain last_activity and user_memories for continuity
+        logger.info(f"Successfully reset review state for user: {user_id}")
     
     def create_send_message_tool(self) -> Tool:
         def send_whatsapp_message(to: str, message: str) -> str:

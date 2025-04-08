@@ -9,6 +9,10 @@ import sys
 import time
 #from custom.MongoDB.mongodb_client import MongoDB
 from custom.functions.helper_functions import filter_reviews_by_rating
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from datetime import datetime, timedelta
+from contextlib import asynccontextmanager
 
 # Add project root to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -45,11 +49,26 @@ response_system = ResponseGeneratorAgent(my_llm)
 # Initialize the agent advice agent
 agent_advice_system = AgentAdviceAgent(my_llm)
 
-# Create FastAPI app
-app = FastAPI()
+# Initialize the scheduler
+scheduler = AsyncIOScheduler()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start scheduler and initialize jobs
+    scheduler.start()
+    setup_review_reminder_scheduler()
+    setup_inactivity_checker_scheduler()
+    
+    yield  # Server is running and handling requests
+    
+    # Shutdown: Clean up scheduler
+    scheduler.shutdown()
+
+# Create FastAPI app with lifespan
+app = FastAPI(lifespan=lifespan)
 
 RESTAURANT_NAME = 'kfc'
-NUM_REVIEWS = 15
+NUM_REVIEWS = 40
 
 @app.post("/webhook")
 async def whatsapp_webhook(
@@ -58,6 +77,12 @@ async def whatsapp_webhook(
     background_tasks: BackgroundTasks = None
 ):
     logger.info(f"Received message from {From}: {Body}")
+    
+    # Add the user to active_sessions if not already there
+    whatsapp_system.active_sessions[From] = True
+    
+    # Update last activity time
+    whatsapp_system.last_activity[From] = datetime.now()
     
     # Process the incoming message
     process_message_tool = whatsapp_system.whatsapp_agent.tools[1]
@@ -128,6 +153,8 @@ async def whatsapp_webhook(
                 content_sid=ending_button_template_sid,
                 variables={}
             )
+            # Reset the user's review state after completion
+            whatsapp_system.reset_user_review_state(From)
         
     elif intent_response.startswith("FEEDBACK_NEEDED:"):
         feedback_request = intent_response.replace("FEEDBACK_NEEDED:", "").strip()
@@ -437,6 +464,9 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
 
 def send_review_for_approval(whatsapp_system, user_phone, review_idx):
     reviews = whatsapp_system.review_data.get(user_phone, {}).get('analyzed_reviews', [])
+    print(f"reviews_idx: {review_idx}")
+    print(f'length of reviews: {len(reviews)}')
+    print(f'user_phone: {user_phone}')
     if review_idx < len(reviews):
         review = reviews[review_idx]
         
@@ -474,6 +504,97 @@ def send_review_for_approval(whatsapp_system, user_phone, review_idx):
         
         return True
     return False
+
+async def send_review_reminder(manager_phone: str):
+    """Send a reminder to complete pending reviews"""
+    formatted_phone = f"whatsapp:{manager_phone}"
+    print("here")
+    
+    reminder_message = """
+    📝 *Review Session Reminder*
+    
+    You have pending reviews waiting for your attention.
+    """
+    
+    whatsapp_system.whatsapp_agent.tools[0].run(
+        to=formatted_phone,
+        message=reminder_message
+    )
+    
+
+async def check_and_send_initial_message(manager_phone: str):
+    """Check if manager needs initial message and send if appropriate"""
+    formatted_phone = f"whatsapp:{manager_phone}"
+    
+    # Check if there's an active review session
+    review_state = whatsapp_system.review_states.get(formatted_phone)
+    print("here_2")
+    
+    # Only send welcome message if not in an active review session
+    if review_state != 'initialized':
+        # Send initial message
+        welcome_message = """
+        👋 *Hello! Time for a Review Check*
+        
+        Would you like to:
+        - Check new reviews
+        - Get a business summary
+        - Get AI advice for your business
+        
+        Choose an option below:
+        """
+        
+        whatsapp_system.whatsapp_agent.tools[0].run(
+            to=formatted_phone,
+            message=welcome_message
+        )
+
+def setup_review_reminder_scheduler():
+    """Setup scheduler for checking inactive review sessions"""
+    async def check_inactive_sessions():
+        current_time = datetime.now()
+        
+        # Use active_sessions instead of review_states
+        for phone in whatsapp_system.active_sessions.keys():
+            print("here are the active sessions")
+            print(whatsapp_system.active_sessions)
+            
+            # Check if there's an initialized review state
+            if whatsapp_system.review_states.get(phone) == 'initialized':
+                # Get last activity time
+                last_activity = whatsapp_system.last_activity.get(phone, current_time)
+                
+                # If inactive for more than 1 hour
+                if (current_time - last_activity) > timedelta(minutes=1):
+                    await send_review_reminder(phone.replace("whatsapp:", ""))
+    
+    # Run every 15 minutes
+    scheduler.add_job(
+        check_inactive_sessions,
+        trigger=IntervalTrigger(minutes=1),
+        id='inactive_session_checker',
+        replace_existing=True
+    )
+
+def setup_inactivity_checker_scheduler():
+    """Setup scheduler for sending initial messages every 12 hours"""
+    async def send_periodic_messages():
+        # Get all known manager phones from active_sessions
+        manager_phones = set()
+        for phone in whatsapp_system.active_sessions.keys():
+            manager_phones.add(phone.replace("whatsapp:", ""))
+        
+        # Send messages to each manager
+        for phone in manager_phones:
+            await check_and_send_initial_message(phone)
+    
+    # Run every 12 hours
+    scheduler.add_job(
+        send_periodic_messages,
+        trigger=IntervalTrigger(minutes=2),
+        id='periodic_message_sender',
+        replace_existing=True
+    )
 
 @app.get("/health")
 def health_check():
