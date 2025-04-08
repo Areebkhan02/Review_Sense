@@ -37,6 +37,10 @@ my_llm = LLM(
     model="gemini/gemini-2.0-flash",
 )
 
+#configuration for response templates
+response_config_path = os.environ.get("RESPONSE_CONFIG_PATH")
+#print(f"Response config path: {response_config_path}")
+
 # Initialize the MongoDB client
 #db = MongoDB()
 
@@ -44,7 +48,7 @@ my_llm = LLM(
 whatsapp_system = WhatsAppAgent(my_llm)
 
 # Initialize the response generator agent
-response_system = ResponseGeneratorAgent(my_llm)
+response_system = ResponseGeneratorAgent(my_llm, response_config_path)
 
 # Initialize the agent advice agent
 agent_advice_system = AgentAdviceAgent(my_llm)

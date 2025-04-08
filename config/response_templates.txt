@@ -1,0 +1,28 @@
+ Response Configuration Guidelines
+
+## General Response Guidelines
+- All responses should begin with a personalized greeting using the customer's name
+- Thank the customer for taking time to leave feedback
+- Keep responses between 2-4 sentences for readability
+- Always use professional but warm language
+- Sign off with the restaurant name
+
+## Positive Reviews (4-5 Stars)
+- Express genuine delight at their positive experience
+- Reference a specific detail from their review to show attentiveness
+- Invite them to return again soon
+- For 5-star reviews, mention our loyalty program and invite them to join
+- Include phrase "We're honored to have served you" for all 5-star responses
+- For 4-star reviews, include "We strive for five-star experiences and would love to hear how we can improve"
+
+## Neutral/Negative Reviews (3 Stars or Below)
+- Express sincere apology for any disappointment
+- Address specific concerns mentioned in the review
+- Explain what steps will be taken to address the issue
+- Offer a 10% discount on their next visit with code "THANKYOU10"
+- For 1-2 star reviews, include manager's direct contact information {+923341336686}
+- Invite them to return to experience the improvements
+- For 3-star reviews, mention "We value your feedback as it helps us grow"
+
+## Special Occasions
+- If review mentions a birthday, anniversary or special event, offer a complimentary dessert on their next visit

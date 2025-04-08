@@ -1,10 +1,15 @@
 from crewai import Agent, Task, LLM
 from langchain.tools import Tool
 import json
+import pathlib
+import os
 
 class ResponseGeneratorAgent:
-    def __init__(self, llm):
+    def __init__(self, llm, response_config_path):
         self.llm = llm  # Store the LLM for use in tools
+        self.response_config = self.load_response_config(response_config_path)
+
+        # Create the response agent
         self.response_agent = Agent(
             role='Restaurant Response Manager',
             goal='Generate personalized, empathetic responses to customer reviews',
@@ -20,6 +25,43 @@ class ResponseGeneratorAgent:
                 self.create_response_generator_tool()
             ]
         )
+
+    def load_response_config(self, config_path=None):
+            """
+            Load response configuration from a file.
+            
+            Args:
+                config_path: Path to the configuration file. If None, uses default path.
+                
+            Returns:
+                str: Raw configuration content for response generation or a message indicating no config
+            """
+            try:
+                # Use default path relative to the script location if not provided
+                if not config_path:
+                    # Get the directory where the script is located
+                    base_dir = pathlib.Path(__file__).parent.parent.absolute()
+                    config_path = os.path.join(base_dir, "config", "response_templates.txt")
+                
+                # Ensure the path is resolved correctly
+                config_path = os.path.abspath(config_path)
+                
+                # Check if file exists
+                if not os.path.exists(config_path):
+                    print(f"Configuration file not found at {config_path}. Using default LLM behavior.")
+                    return "NO_CONFIG_FILE_PROVIDED: Using default LLM behavior for response generation."
+                
+                # Read the configuration file
+                with open(config_path, 'r', encoding='utf-8') as file:
+                    config_text = file.read()
+                
+                print(f"Successfully loaded response configuration from {config_path}")
+                return config_text
+                
+            except Exception as e:
+                print(f"Error loading configuration file: {str(e)}. Using default LLM behavior.")
+                return "ERROR_LOADING_CONFIG: Using default LLM behavior for response generation."
+    
         
     def create_response_generator_tool(self) -> Tool:
         def generate_responses(analyzed_reviews_json: str) -> str:
@@ -74,8 +116,14 @@ class ResponseGeneratorAgent:
     
     def create_response_task(self) -> Task:
         return Task(
-            description="""
-            For each review in the analyzed_reviews array, create a genuine and personalized response:
+            description=f"""
+            For each review in the analyzed_reviews array, create a genuine and personalized response
+            following both the specific guidelines below AND the response configuration template:
+            
+            RESPONSE CONFIGURATION TEMPLATE:
+            {self.response_config}
+            
+            Follow these guidelines when generating responses:
             
             1. ANALYZE THE SPECIFIC CONTENT of each review, paying special attention to:
                - The precise issues, complaints, or praise mentioned
@@ -86,6 +134,7 @@ class ResponseGeneratorAgent:
             
             2. For each review, compose a COMPLETELY CUSTOM RESPONSE that:
                - Addresses the customer by name
+               - Uses appropriate templates from the RESPONSE CONFIGURATION based on star rating
                - References their specific feedback points (not generic)
                - Acknowledges their exact concerns or compliments
                - Provides relevant information or solutions to specific issues
@@ -96,12 +145,11 @@ class ResponseGeneratorAgent:
                - For negative experiences: Shows sincere concern and offers concrete steps or resolution, invite them to visit again or offer a discount on next visit
                - For positive experiences: Expresses genuine appreciation for specific compliments
             
-            3. FORMAT EACH RESPONSE with:
-               - A personalized greeting
-               - 2-3 paragraphs of substance addressing specific points
-               - A forward-looking closing statement
-               - A sign-off ("Warm regards," "Sincerely," etc.)
-               - Restaurant Manager signature
+            3. FORMAT EACH RESPONSE following the template structure:
+               - Begin with an appropriate introduction from the template
+               - Include 2-3 paragraphs of substance addressing specific points
+               - Use a forward-looking closing statement from the template
+               - End with the signature format specified in the template
             
             4. ADD each unique, tailored response to its corresponding review under a new field called 'response'
             
@@ -109,8 +157,8 @@ class ResponseGeneratorAgent:
             """,
             expected_output="""A JSON string containing all analyzed reviews, now with highly
             personalized responses that directly address the specific content of each review.
-            Each response should be unique, natural-sounding, and specifically tailored to the
-            individual review's content.""",
+            Each response should follow the configuration template structure while being unique, 
+            natural-sounding, and specifically tailored to the individual review's content.""",
             agent=self.response_agent
         )
         

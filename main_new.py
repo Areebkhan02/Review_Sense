@@ -19,12 +19,16 @@ my_llm = LLM(
     model="gemini/gemini-2.0-flash",
 )
 
+response_config_path = os.environ.get("RESPONSE_CONFIG_PATH")
+
+
+
 def run_review_workflow(restaurant_name: str = "lalqila", num_reviews: int = 10):
     """Run the review analysis workflow and return the results"""
     # Create the agents
     fetcher_system = ReviewFetcherAgent(my_llm)
     analysis_system = SentimentAnalysisAgent(my_llm)
-    response_system = ResponseGeneratorAgent(my_llm)
+    response_system = ResponseGeneratorAgent(my_llm, response_config_path)
     
     # Create the tasks
     fetcher_task = fetcher_system.create_fetch_task(restaurant_name, num_reviews)
