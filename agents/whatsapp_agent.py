@@ -48,7 +48,7 @@ class WhatsAppAgent:
             llm=llm,
             tools=[
                 self.create_send_message_tool(),
-                self.create_process_message_tool(),
+                self.create_llm_intent_processor_tool(),
                 self.create_review_management_tool(),
                 self.create_memory_management_tool(),
                 self.create_crew_output_processor_tool(),
@@ -138,6 +138,7 @@ class WhatsAppAgent:
             description="Sends a WhatsApp message to a restaurant manager. Use this to send responses, review information, and approval requests."
         )
     
+    '''
     def create_process_message_tool(self) -> Tool:
         def process_whatsapp_message(user_id: str, message_text: str) -> str:
             """
@@ -236,6 +237,7 @@ class WhatsAppAgent:
             name="ProcessWhatsAppTool",
             description="Processes incoming WhatsApp messages from restaurant managers. Identifies commands, review responses, and conversation context."
         )
+    '''
     
     def create_review_management_tool(self) -> Tool:
         def manage_review_workflow(action: str, user_id: str, data: str = None) -> str:
@@ -599,6 +601,8 @@ class WhatsAppAgent:
             description="Sends a WhatsApp template message with interactive buttons to a restaurant manager. Used for providing structured options in the conversation."
         )
     
+    '''
+    
     def create_approval_task(self, manager_phone: str, reviews_json: str = None) -> Task:
         return Task(
             description=f"""
@@ -702,4 +706,110 @@ class WhatsAppAgent:
             """,
             expected_output="A significantly improved review response that addresses all the manager's feedback points, sent to them for approval.",
             agent=self.whatsapp_agent
+        )
+
+    '''
+    
+    def create_intent_classification_task(self, message_text: str) -> Task:
+        """Creates a task to classify the intent of a message"""
+        return Task(
+            description=f"""
+            As a message intent classifier, determine the intent of this message from a restaurant manager reviewing customer response drafts.
+            
+            Message: "{message_text}"
+            
+            Analyze the message carefully and classify it into EXACTLY ONE of these categories:
+            1. APPROVED - If the message indicates approval (examples: "looks good", "approve", "yes", "good", "👍", "this is good", "perfect", "send it")
+            2. REVISION - If the message suggests changes or provides feedback (examples: "add a discount", "change this", "offer something", "not good", "revise", "fix this")
+            3. UNCLEAR - If the message is ambiguous or unrelated (examples: "hmm", "maybe", "i don't know", "what do you think?")
+            
+            Return ONLY the intent identifier (APPROVED, REVISION, or UNCLEAR) without any explanation or additional text.
+            """,
+            expected_output="A single word representing the message intent: APPROVED, REVISION, or UNCLEAR",
+            agent=self.whatsapp_agent
+        )
+
+    def create_llm_intent_processor_tool(self) -> Tool:
+        """Creates a tool that uses LLM to process message intent."""
+        def process_message_intent(user_id: str, message_text: str) -> str:
+            """
+            Process an incoming message using LLM to determine intent
+            
+            Args:
+                user_id: The user's WhatsApp number
+                message_text: The message content
+                
+            Returns:
+                str: The determined intent command
+            """
+            # First check if we're in an active review session
+            if user_id not in self.review_data:
+                # If no active review session, treat as conversation
+                return "CONVERSATION:WELCOME"
+            
+            # If we're in a review session
+            current_idx = self.current_indices.get(user_id, 0)
+            reviews = self.review_data.get(user_id, {}).get('analyzed_reviews', [])
+            
+            # If all reviews completed
+            if current_idx >= len(reviews) or self.review_states.get(user_id) == 'completed':
+                return "COMMAND:ALL_COMPLETED"
+            
+            # Create a temporary crew to run the intent classification task
+            intent_task = self.create_intent_classification_task(message_text)
+            
+            try:
+                from crewai import Crew
+                
+                # Create a small crew just for intent classification
+                intent_crew = Crew(
+                    agents=[self.whatsapp_agent],
+                    tasks=[intent_task],
+                    verbose=False
+                )
+                
+                # Execute the task
+                intent_result = intent_crew.kickoff()
+                
+                # Extract the intent from the result
+                if hasattr(intent_result, 'raw'):
+                    intent = intent_result.raw.strip().upper()
+                else:
+                    intent = str(intent_result).strip().upper()
+                
+                logger.info(f"Classified message intent: {intent}")
+                
+                # Map the intent to command format
+                if "APPROVED" in intent:
+                    # Mark the current review as approved
+                    reviews[current_idx]['approval_status'] = 'approved'
+                    return "APPROVED:NEXT_REVIEW"
+                elif "REVISION" in intent:
+                    # Mark that the review needs revision
+                    reviews[current_idx]['approval_status'] = 'needs_revision'
+                    reviews[current_idx]['manager_feedback'] = message_text
+                    return f"REVISION:{message_text}"
+                else:
+                    return "UNCLEAR:Intent not clear"
+                
+            except Exception as e:
+                logger.error(f"Error in LLM intent classification: {str(e)}")
+                # Fall back to looking for keywords
+                message_lower = message_text.lower()
+                
+                # Simple keyword matching as fallback
+                if any(approval in message_lower for approval in ['approve', 'good', 'yes', 'ok', 'send']):
+                    reviews[current_idx]['approval_status'] = 'approved'
+                    return "APPROVED:NEXT_REVIEW"
+                elif any(revision in message_lower for revision in ['revise', 'change', 'edit', 'discount', 'offer']):
+                    reviews[current_idx]['approval_status'] = 'needs_revision'
+                    reviews[current_idx]['manager_feedback'] = message_text
+                    return f"REVISION:{message_text}"
+                else:
+                    return "UNCLEAR:Intent not clear"
+        
+        return Tool.from_function(
+            func=process_message_intent,
+            name="LLMIntentProcessorTool",
+            description="Processes message intent using LLM to determine if it's approval, revision request, or unclear."
         )

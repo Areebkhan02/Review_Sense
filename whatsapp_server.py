@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 RESTAURANT_NAME = 'kfc'
-NUM_REVIEWS = 40
+NUM_REVIEWS = 30
 
 @app.post("/webhook")
 async def whatsapp_webhook(
@@ -88,8 +88,9 @@ async def whatsapp_webhook(
     # Update last activity time
     whatsapp_system.last_activity[From] = datetime.now()
     
-    # Process the incoming message
-    process_message_tool = whatsapp_system.whatsapp_agent.tools[1]
+    # Process the incoming message with our new LLM-based intent processor
+    # Note: Tool index may need adjustment based on the order in the initialization
+    process_message_tool = whatsapp_system.whatsapp_agent.tools[1]  # Index for the LLM intent processor
     intent_response = process_message_tool.run(
         user_id=From,
         message_text=Body
@@ -97,27 +98,45 @@ async def whatsapp_webhook(
     
     logger.info(f"Intent from message: {intent_response}")
     
-    # Handle different intents based on the response
-    if intent_response == "COMMAND:FETCH_REVIEWS":
-        # Start background task to fetch reviews
+    # Handle the welcome/initial message differently - automatically fetch reviews
+    if intent_response == "CONVERSATION:WELCOME":
+        # Send welcome message
+        welcome_message = """
+        👋 *Hello [Business Owner]!*
+        
+        Welcome to our Restaurant Review Manager. I'm automatically fetching your latest reviews now.
+        Please wait a moment while I prepare them for your review.
+        """
+        
+        whatsapp_system.whatsapp_agent.tools[0].run(
+            to=From,
+            message=welcome_message
+        )
+        
+        # Save to memory
+        memory = whatsapp_system.get_user_memory(From)
+        memory.save_context({"input": Body}, {"output": welcome_message})
+        
+        # Automatically start fetching reviews in the background
         background_tasks.add_task(
             fetch_reviews_background, 
-            manager_phone=From.replace("whatsapp:", ""),  # Remove prefix for processing
+            manager_phone=From.replace("whatsapp:", ""),
             restaurant_name=RESTAURANT_NAME,
             num_reviews=NUM_REVIEWS
         )
         
-        # Send immediate acknowledgment
-        whatsapp_system.whatsapp_agent.tools[0].run(
-            to=From,
-            message="I'm fetching the latest reviews for your restaurant. This may take a minute or two..."
-        )
-        
-    elif intent_response.startswith("COMMAND:NEXT_REVIEW") or intent_response.startswith("COMMAND:CONTINUE_REVIEWS"):
-        current_idx = whatsapp_system.current_indices.get(From, 0)
-        send_review_for_approval(whatsapp_system, From, current_idx)
-        
+    # Handle APPROVED command
     elif intent_response.startswith("APPROVED:NEXT_REVIEW"):
+        # Send confirmation message about approval
+        confirmation_message = "✅ Response approved! "
+        whatsapp_system.whatsapp_agent.tools[0].run(
+        to=From,
+        message=confirmation_message
+            )
+        
+        # Add timer/pause here
+        await asyncio.sleep(60)  # Pause for 3 seconds before showing next review
+ 
         # Move to next review
         current_idx = whatsapp_system.current_indices.get(From, 0)
         whatsapp_system.current_indices[From] = current_idx + 1
@@ -140,7 +159,6 @@ async def whatsapp_webhook(
             *Summary:*
             Total Reviews: {summary_data.get('total', 0)}
             Approved: {summary_data.get('approved', 0)}
-           
             
             Thank you for reviewing these responses. The approved responses will be sent to customers.
             """
@@ -149,24 +167,27 @@ async def whatsapp_webhook(
                 to=From,
                 message=completion_message
             )
-
-                        # Then send the ending button template
-            ending_button_template_sid = "HXc38156470966a4e486740800455dcc00"
-            whatsapp_system.whatsapp_agent.tools[5].run(
-                to=From,
-                content_sid=ending_button_template_sid,
-                variables={}
-            )
+            
             # Reset the user's review state after completion
             whatsapp_system.reset_user_review_state(From)
         
-    elif intent_response.startswith("FEEDBACK_NEEDED:"):
-        feedback_request = intent_response.replace("FEEDBACK_NEEDED:", "").strip()
+    # Handle UNCLEAR command
+    elif intent_response.startswith("UNCLEAR:"):
+        unclear_message = """
+        I'm not sure I understood your response. Please let me know if you:
+        
+        - Want to approve this response (say "approve" or "looks good")
+        - Want to revise it (provide specific feedback)
+        
+        What would you like to do with this review response?
+        """
+        
         whatsapp_system.whatsapp_agent.tools[0].run(
             to=From,
-            message=f"{feedback_request}"
+            message=unclear_message
         )
         
+    # Handle REVISION command
     elif intent_response.startswith("REVISION:"):
         feedback = intent_response.replace("REVISION:", "").strip()
         
@@ -213,64 +234,28 @@ async def whatsapp_webhook(
                 # Update the review with revised response
                 reviews[current_idx]['response'] = revised_response
                 
-                # Send the revised response first as a regular message
+                # Send the revised response
                 response_message = f"""
                 I've revised the response based on your feedback:
                 
                 *Revised Response:*
                 {revised_response}
+                
+                Does this look good now? Let me know if you approve or need further revisions.
                 """
                 
                 whatsapp_system.whatsapp_agent.tools[0].run(
                     to=From,
                     message=response_message
                 )
-                
-                # Then send the action buttons template
-                review_action_template_sid = "HXdefe78f44b33997898bda8101784b2f3"  # Your template SID
-                whatsapp_system.whatsapp_agent.tools[5].run(
-                    to=From,
-                    content_sid=review_action_template_sid,
-                    variables={}
-                )
-
-                # Save the review data to MongoDB
-                # result_update = db.update_review_response(
-                #     restaurant_name=RESTAURANT_NAME,
-                #     author=reviews[current_idx]['author'],
-                #     text_prefix=reviews[current_idx]['text'],
-                #     response=revised_response
-                # )
-                # print(f"MongoDB update result: {result_update}")
             except Exception as e:
-                # Error handling...
-                pass
-        
-    elif intent_response.startswith("COMMAND:SHOW_SUMMARY"):
-        # Show summary
-        summary = whatsapp_system.whatsapp_agent.tools[2].run(
-            action="summarize",
-            user_id=From
-        )
-        summary_data = json.loads(summary)
-        
-        summary_message = f"""
-        *Review Progress Summary*
-        
-        Total Reviews: {summary_data.get('total', 0)}
-        Approved: {summary_data.get('approved', 0)}
-        Pending: {summary_data.get('pending', 0)}
-        Needs Revision: {summary_data.get('needs_revision', 0)}
-        Current Review: {summary_data.get('current_index', 0) + 1} of {summary_data.get('total', 0)}
-        
-        Type "continue" to resume reviewing
-        """
-        
-        whatsapp_system.whatsapp_agent.tools[0].run(
-            to=From,
-            message=summary_message
-        )
-        
+                error_message = f"Sorry, I encountered an error while revising the response: {str(e)}"
+                whatsapp_system.whatsapp_agent.tools[0].run(
+                    to=From,
+                    message=error_message
+                )
+    
+    # Handle ALL_COMPLETED command
     elif intent_response.startswith("COMMAND:ALL_COMPLETED"):
         # Get summary data for the completed reviews
         summary = whatsapp_system.whatsapp_agent.tools[2].run(
@@ -288,114 +273,14 @@ async def whatsapp_webhook(
         Approved: {summary_data.get('approved', 0)}
         
         Thank you for reviewing these responses. The approved responses will be sent to customers.
+        
+        You can type any message to start a new session.
         """
         
         whatsapp_system.whatsapp_agent.tools[0].run(
             to=From,
             message=completion_message
         )
-        #time.sleep(2)
-
-        # Then send the ending button template
-        ending_button_template_sid = "HXc38156470966a4e486740800455dcc00"
-        whatsapp_system.whatsapp_agent.tools[5].run(
-            to=From,
-            content_sid=ending_button_template_sid,
-            variables={}
-        )
-        
-    elif intent_response.startswith("UNCLEAR:"):
-        # Send reminder about number options
-        unclear_message = intent_response.replace("UNCLEAR:", "").strip()
-        whatsapp_system.whatsapp_agent.tools[0].run(
-            to=From,
-            message=unclear_message
-        )
-        
-    elif intent_response.startswith("CONVERSATION:"): 
-        # # Get your content SID from the successfully created template
-        # restaurant_advisor_template_sid = "HX48b4234fbf7194f89b540dbe648585de"
-        # manager_name = "[Business Owner]"
-        
-        # # Try to send the template message with buttons
-        # try:
-        #     if restaurant_advisor_template_sid:
-        #         # Use our new template tool
-        #         template_tool = whatsapp_system.whatsapp_agent.tools[5]  # Index 5 for the template tool
-        #         template_tool.run(
-        #             to=From,
-        #             content_sid=restaurant_advisor_template_sid,
-        #             variables={"1": manager_name}
-        #         )
-        #     else:
-        #         # Fallback to regular message if template SID is not configured
-        #         fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
-        #         whatsapp_system.whatsapp_agent.tools[0].run(
-        #             to=From,
-        #             message=fallback_message
-        #         )
-        # except Exception as e:
-        #     logger.error(f"Error sending template message: {str(e)}")
-        #     # Fallback to regular message if template fails
-        #     fallback_message = "I'm here to help with your review management. You can say 'get reviews' to fetch new reviews, 'continue' to review responses, or 'summary' to see your progress."
-        #     whatsapp_system.whatsapp_agent.tools[0].run(
-        #         to=From,
-        #         message=fallback_message
-        #     )
-
-        # Send the template message with buttons - added 9th april 2025
-        send_restaurant_advisor_template(whatsapp_system, From)
-        
-        # Add to memory
-        memory = whatsapp_system.get_user_memory(From)
-        memory.save_context({"input": Body}, {"output": "Sent template with options"})
-        
-    elif intent_response.startswith("COMMAND:AGENT_ADVICE"):
-        # Send welcome message for agent advice
-        welcome_message = agent_advice_system.get_welcome_message()
-        whatsapp_system.whatsapp_agent.tools[0].run(
-            to=From,
-            message=welcome_message
-        )
-        
-        # Save to memory
-        memory = agent_advice_system.get_user_memory(From)
-        memory.save_context(
-            {"input": Body}, 
-            {"output": welcome_message}
-        )
-    
-    elif intent_response.startswith("AGENT_ADVICE:"):
-        # Extract the message for the agent
-        advice_message = intent_response.replace("AGENT_ADVICE:", "").strip()
-        
-        # Get response from the agent advice system
-        response = agent_advice_system.handle_advice_request(From, advice_message)
-        
-        # Check if we need to exit agent advice mode
-        if response.startswith("EXIT:"):
-            exit_message = response.replace("EXIT:", "").strip()
-            whatsapp_system.whatsapp_agent.tools[0].run(
-                to=From,
-                message=exit_message
-            )
-            
-            # Wait a moment before sending the template
-            time.sleep(2)
-            
-            # Send the ending button template to return to main options
-            ending_button_template_sid = "HXc38156470966a4e486740800455dcc00"
-            whatsapp_system.whatsapp_agent.tools[5].run(
-                to=From,
-                content_sid=ending_button_template_sid,
-                variables={}
-            )
-        else:
-            # Send the agent advice response
-            whatsapp_system.whatsapp_agent.tools[0].run(
-                to=From,
-                message=response
-            )
     
     return {"status": "success", "message": "Message processed"}
 
@@ -404,59 +289,64 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
     try:
         # Run the review workflow
         crew_output = run_review_workflow(restaurant_name, num_reviews)
-        #print(f"review_result: {review_result}")  
-        #                                                                                                                                                                           
-         # Use the new tool to process the CrewAI output
-        process_output_tool = whatsapp_system.whatsapp_agent.tools[4]  # The tool we just added
+        
+        # Use the tool to process the CrewAI output
+        process_output_tool = whatsapp_system.whatsapp_agent.tools[4]  # Make sure this index is correct
         processed_json_str = process_output_tool.run(crew_output)
         
         # Save the results to the WhatsApp agent's state
-        print("json before \n")
         json_result_original = json.loads(processed_json_str)
         json_result, removed_count = filter_reviews_by_rating(json_result_original)
 
-        print("json after \n")
-        print(f"Removed {removed_count} reviews")
-
         # Format the phone number correctly for Twilio
         formatted_phone = f"whatsapp:{manager_phone}"
-        print("formatted_phone \n")
+        
         # Initialize the review session
         whatsapp_system.review_data[formatted_phone] = json_result
         whatsapp_system.current_indices[formatted_phone] = 0
         whatsapp_system.review_states[formatted_phone] = 'initialized'
-        print("review_data \n")
 
         # Initialize approval status
         reviews_original = json_result_original.get('analyzed_reviews', [])
         reviews = json_result.get('analyzed_reviews', [])
         for review in reviews:
             review['approval_status'] = 'pending'
-        print("reviews \n")
 
         # Get counts of different types of reviews
         total_reviews = len(reviews_original)
         high_rated_reviews = removed_count
         pending_reviews = total_reviews - high_rated_reviews
 
-        # Use the template message tool instead of plain text
-        review_start_template_sid = "HXcf7e1cbf350f0695804d287fa71dff4d"  # Replace with your actual template SID
-        template_variables = {
-            "1": str(total_reviews),
-            "2": str(high_rated_reviews),
-            "3": str(pending_reviews)
-        }
-
-        whatsapp_system.whatsapp_agent.tools[5].run(
+        # Send message about review count
+        review_start_message = f"""
+        I've analyzed your recent reviews:
+        
+        📊 *Review Analysis*
+        • Total Reviews: {total_reviews}
+        • High-Rated Reviews (already good): {high_rated_reviews}
+        • Reviews Needing Responses: {pending_reviews}
+        
+        Let's start reviewing responses for the lower-rated reviews. I'll show you each one, and you can simply approve it or suggest changes.
+        """
+        
+        whatsapp_system.whatsapp_agent.tools[0].run(
             to=formatted_phone,
-            content_sid=review_start_template_sid,
-            variables=template_variables
+            message=review_start_message
         )
-
-        # # Save the review data to MongoDB
-        # db_result = db.save_reviews(restaurant_name, reviews_original)
-        # print(f"MongoDB save result: {db_result}")
-        # print(f"Saved {db_result.get('saved_reviews', 0)} reviews to database")
+        
+        # Wait a moment before sending the first review
+        time.sleep(2)
+        
+        # Send the first review automatically
+        if pending_reviews > 0:
+            # Use our updated send_review_for_approval function
+            send_review_for_approval(whatsapp_system, formatted_phone, 0)
+        else:
+            whatsapp_system.whatsapp_agent.tools[0].run(
+                to=formatted_phone,
+                message="All your reviews already have high ratings. Great job with your customer service!"
+            )
+            whatsapp_system.review_states[formatted_phone] = 'completed'
         
     except Exception as e:
         logger.error(f"Error in fetch_reviews_background: {str(e)}")
@@ -470,20 +360,16 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
         return {"status": "error", "message": str(e)}
 
 def send_review_for_approval(whatsapp_system, user_phone, review_idx):
+    """Send a review for approval without buttons or review numbering"""
     reviews = whatsapp_system.review_data.get(user_phone, {}).get('analyzed_reviews', [])
-    print(f"reviews_idx: {review_idx}")
-    print(f'length of reviews: {len(reviews)}')
-    print(f'user_phone: {user_phone}')
     if review_idx < len(reviews):
         review = reviews[review_idx]
         
         # Format the star rating
         stars = "⭐" * int(review.get('rating', 3))
         
-        # First send the review details as a regular message
+        # Send the review details without "Review X of Y" heading
         review_message = f"""
-        *Review {review_idx + 1} of {len(reviews)}*
-        
         *From:* {review.get('author', 'Customer')}
         *Rating:* {stars}
         
@@ -492,21 +378,14 @@ def send_review_for_approval(whatsapp_system, user_phone, review_idx):
         
         *Suggested Response:*
         {review.get('response', '')}
+        
+        Does this response look good? Please let me know if you approve or if you'd like any changes.
         """
         
         # Send review details
         whatsapp_system.whatsapp_agent.tools[0].run(
             to=user_phone,
             message=review_message
-        )
-        
-        # Then send the action buttons template
-        time.sleep(2)
-        review_action_template_sid = "HXdefe78f44b33997898bda8101784b2f3"  # Replace with the SID you get after creating template
-        whatsapp_system.whatsapp_agent.tools[5].run(
-            to=user_phone,
-            content_sid=review_action_template_sid,
-            variables={}  # No variables needed for this template
         )
         
         return True
@@ -535,35 +414,28 @@ async def check_and_send_initial_message(manager_phone: str):
     
     # Check if there's an active review session
     review_state = whatsapp_system.review_states.get(formatted_phone)
-    print("here_2")
     
     # Only send welcome message if not in an active review session
     if review_state != 'initialized':
-        # Send initial message
-
-        # # comment out this placeholder message 9th april 2025
-        # welcome_message = """
-        # 👋 *Hello! Time for a Review Check*
+        # Updated welcome message that indicates automatic fetching
+        welcome_message = """
+        👋 *Hello [Business Owner]!*
         
-        # Would you like to:
-        # - Check new reviews
-        # - Get a business summary
-        # - Get AI advice for your business
+        Welcome to our Restaurant Review Manager. I'm automatically fetching your latest reviews now.
+        Please wait a moment while I prepare them for your review.
+        """
         
-        # Choose an option below:
-        # """
+        whatsapp_system.whatsapp_agent.tools[0].run(
+            to=formatted_phone,
+            message=welcome_message
+        )
         
-        # whatsapp_system.whatsapp_agent.tools[0].run(
-        #     to=formatted_phone,
-        #     message=welcome_message
-        # )
-
-        # Try to send the template message with buttons - added 9th april 2025
-        send_restaurant_advisor_template(whatsapp_system, formatted_phone)
-        
-       
-
-
+        # Automatically trigger review fetching
+        await fetch_reviews_background(
+            manager_phone=manager_phone,
+            restaurant_name=RESTAURANT_NAME,
+            num_reviews=NUM_REVIEWS
+        )
 
 def setup_review_reminder_scheduler():
     """Setup scheduler for checking inactive review sessions"""
@@ -587,7 +459,7 @@ def setup_review_reminder_scheduler():
     # Run every 15 minutes
     scheduler.add_job(
         check_inactive_sessions,
-        trigger=IntervalTrigger(minutes=1),
+        trigger=IntervalTrigger(minutes=2),
         id='inactive_session_checker',
         replace_existing=True
     )
@@ -607,7 +479,7 @@ def setup_inactivity_checker_scheduler():
     # Run every 12 hours
     scheduler.add_job(
         send_periodic_messages,
-        trigger=IntervalTrigger(minutes=2),
+        trigger=IntervalTrigger(minutes=3),
         id='periodic_message_sender',
         replace_existing=True
     )
