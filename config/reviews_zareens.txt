@@ -1,0 +1,145 @@
+Review number: 1
+rating: 4
+text:
+'''
+A friend took us here and order chicken boti - which I never heard - it’s basically chicken thighs; the garlic naan, lamb curry and chicken are definitely delicious. Must try. So don’t think of mutton boti - this boti is completely different.
+'''
+time: April 2025
+author: chindada srikar
+
+
+Review number: 2
+rating: 5
+text:
+'''
+Hidden gem.
+
+Recommended dishes
+Garlic Naan, Chicken Boti
+'''
+time: April 2025
+author: Art B
+
+
+Review number: 4
+rating: 3
+text:
+'''
+If you're on the fence whether to go to the shoreline location on mountain view. Go there instead. It's definitely a better run kitchen flavor wise. More consistent and I think a little bit more qty too. It's at least 10% more cost at the Palo Alto location.
+
+As for the food. Mountain view is alwayyzzzzzzz spot on. Palo Alto like to put a ton, and I mean a TON of black pepper. It's not balanced like it is in mountain view. Also the filling like the cabbage is a bit overwhelming in Palo Alto. Zareens Palo Alto, tighten it up!
+
+Quality isn't in question. Definitely fresh ingredients
+Chicken is definitely better in mountain view. Try the burrito wrap in mountain view.
+'''
+time: April 2025
+author: Robert Wells
+
+
+Review number: 5
+rating: 1
+text:
+'''
+I’m genuinely surprised by the number of positive reviews for this restaurant. I’m not sure how the ambiance is inside, but the outdoor area was just average. We ordered the Chicken Zinger Burger, Chicken Boti Sizzler, and Tandoori Burger—and honestly, they were all quite bland. No salt, no spice—just lacking flavor overall.
+
+The so-called “sizzler” didn’t even sizzle. I had to double-check if that was really what we ordered—it looked more like a mess than a proper dish. Definitely not something I’d try again.
+
+'''
+time: April 2025
+author: likhitha kumble
+
+
+Review number: 6
+rating: 2
+text:
+'''
+Honestly pretty mediocre. I got the chole puri and paneer Tikka masala thali.
+The puri is drenched in oil. The plate had abysmally small portion size for chole and potatoes - I ordered an extra portion $$ of chole that never came.
+The paneer Tikka is the standard orange gravy, which is straight up bad imo. Paneer was chewy/stiff. Garlic naan was thick. Dal was okay.
+The servers are in a rush because the place is busy and they can't hire more people. One of them even spilled curry on my jacket.
+
+Honestly not surprised since a lot of places get popular and quickly expand to a large audience, diluting their service - Zareen's is no different.
+
+'''
+time: April 2025
+author: Neil Adit
+
+
+Review number: 7
+rating: 5
+text:
+'''
+We had the BEST time dining here as a large group!
+
+From the moment we walked in, Ishu was an absolute rockstar. She patiently helped us get a table and went above and beyond to accommodate all our (many!) requests with a smile. Her attentiveness and warmth made us feel so welcome—she checked in on us regularly and made sure everything was perfect throughout the night.
+
+The food, as always, was incredible—flavorful and fresh—but it was the outstanding service that truly made our experience 10x better.
+
+'''
+time: April 2025
+author: Priya Kulkarni
+
+
+Review number: 8
+rating: 1
+text:
+'''
+We went here it was full of people but got sick stomach issues and diarrhea..horrible experience. 
+Food was avg anyway, didn’t like the kebab it’s with eggs and other food was basic. But the worst thing is the sickness! It’s not clean!
+
+'''
+time: April 2025
+author: Anthony Quartararo
+
+
+Review number: 9
+rating: 5
+text:
+'''
+Good place
+
+'''
+time: April 2025
+author: Manu Braich
+
+
+Review number: 8
+rating: 3
+text:
+'''
+Very busy location, Nihari was ok not great… otherwise service was good
+'''
+time: April 2025
+author: Syed Rahman
+
+
+Review number: 9
+rating: 5
+text:
+'''
+Good place
+
+'''
+time: April 2025
+author: Manu Braich
+
+
+Review number: 10
+rating: 5
+text:
+'''
+There is a short wait, and you can choose the menu and pay while waiting in line. The price is reasonable and the food is delicious.
+
+'''
+time: April 2025
+author: Changjun Lim
+
+
+
+
+
+
+
+
+
+

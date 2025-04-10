@@ -60,8 +60,8 @@ scheduler = AsyncIOScheduler()
 async def lifespan(app: FastAPI):
     # Startup: Start scheduler and initialize jobs
     scheduler.start()
-    setup_review_reminder_scheduler()
-    setup_inactivity_checker_scheduler()
+    #setup_review_reminder_scheduler()
+    #setup_inactivity_checker_scheduler()
     
     yield  # Server is running and handling requests
     
@@ -102,9 +102,9 @@ async def whatsapp_webhook(
     if intent_response == "CONVERSATION:WELCOME":
         # Send welcome message
         welcome_message = """
-        👋 *Hello [Business Owner]!*
+        👋 *Hello Zareen's Manager!*
         
-        Welcome to our Restaurant Review Manager. I'm automatically fetching your latest reviews now.
+        Welcome to Zareen's Restaurant Review Manager. I'm automatically fetching your latest reviews now.
         Please wait a moment while I prepare them for your review.
         """
         
@@ -135,7 +135,7 @@ async def whatsapp_webhook(
             )
         
         # Add timer/pause here
-        await asyncio.sleep(60)  # Pause for 3 seconds before showing next review
+        await asyncio.sleep(40)  # Pause for 3 seconds before showing next review
  
         # Move to next review
         current_idx = whatsapp_system.current_indices.get(From, 0)
@@ -154,6 +154,8 @@ async def whatsapp_webhook(
             summary_data = json.loads(summary)
             
             completion_message = f"""
+            *No New Reviews Found!*
+
             *All reviews have been processed!*
             
             *Summary:*
@@ -266,6 +268,8 @@ async def whatsapp_webhook(
         
         # Send a message informing the user that all reviews are processed
         completion_message = f"""
+        *No New Reviews Found!*
+
         *All reviews have been processed!*
         
         *Summary:*
@@ -291,7 +295,8 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
         crew_output = run_review_workflow(restaurant_name, num_reviews)
         
         # Use the tool to process the CrewAI output
-        process_output_tool = whatsapp_system.whatsapp_agent.tools[4]  # Make sure this index is correct
+        process_output_tool = whatsapp_system.whatsapp_agent.tools[4]
+          # Make sure this index is correct
         processed_json_str = process_output_tool.run(crew_output)
         
         # Save the results to the WhatsApp agent's state

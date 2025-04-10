@@ -12,6 +12,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 from dotenv import load_dotenv
+import re
 
 load_dotenv()
 class ReviewFetcherAgent:
@@ -27,11 +28,12 @@ class ReviewFetcherAgent:
             allow_delegation=False,
             llm=llm,
             tools=[
-                self.create_review_fetch_tool(),
+                self.create_file_review_fetch_tool(),
                 self.create_review_filter_tool()
             ]
         )
 
+    '''
     def create_review_fetch_tool(self) -> Tool:
         def fetch_reviews(restaurant_name: str, num_reviews: int = 10) -> str:
             """
@@ -52,7 +54,7 @@ class ReviewFetcherAgent:
             print(f"Setting up Chrome options for {restaurant_name}")
             chrome_options = webdriver.ChromeOptions()
             #chrome_options = Options()
-            chrome_options.set_capability('browserless:token', os.environ['BROWSER_TOKEN'])
+            #chrome_options.set_capability('browserless:token', os.environ['BROWSER_TOKEN'])
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
@@ -66,13 +68,13 @@ class ReviewFetcherAgent:
                 # Initialize the driver
                 print(f"Initializing Chrome driver x 2")
                 # Use webdriver_manager to handle ChromeDriver installation and versioning
-                # service = Service(ChromeDriverManager().install())
-                # driver = webdriver.Chrome(service=service, options=chrome_options)
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=chrome_options)
 
-                driver = webdriver.Remote(
-                            command_executor=os.environ['BROWSER_WEBDRIVER_ENDPOINT'],
-                            options=chrome_options
-                        )
+                # driver = webdriver.Remote(
+                #             command_executor=os.environ['BROWSER_WEBDRIVER_ENDPOINT'],
+                #             options=chrome_options
+                #         )
                 
                 # Search for the restaurant on Google Maps directly
                 print(f"Searching for: {restaurant_name}")
@@ -336,6 +338,103 @@ class ReviewFetcherAgent:
             description="Fetches restaurant reviews from Google Maps. Returns a JSON string with review data."
         )
 
+    '''
+
+    def create_file_review_fetch_tool(self) -> Tool:
+        def fetch_reviews_from_file(restaurant_name: str, num_reviews: int = 10) -> str:
+            """
+            Fetch reviews for a restaurant from a text file
+            
+            Args:
+                restaurant_name (str): Name of the restaurant to search for
+                num_reviews (int): Maximum number of reviews to fetch (default: 10)
+                
+            Returns:
+                str: JSON string containing the reviews
+            """
+            print(f"Fetching reviews for {restaurant_name} from file")
+            reviews = []
+            
+            # Get the file path from environment variable
+            reviews_file_path = os.environ.get("REVIEWS_FILE_PATH")
+            
+            if not reviews_file_path or not os.path.exists(reviews_file_path):
+                print(f"Error: Reviews file not found at {reviews_file_path}")
+                return json.dumps({
+                    'status': 'error',
+                    'message': f"Reviews file not found at {reviews_file_path}",
+                    'restaurant_name': restaurant_name,
+                    'reviews': []
+                })
+                
+            try:
+                with open(reviews_file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                             # Split the content by "Review number:" to get individual reviews
+                review_blocks = re.split(r'Review number:\s*\d+', content)
+                # Remove any empty blocks
+                review_blocks = [block.strip() for block in review_blocks if block.strip()]
+                
+                for block in review_blocks:
+                    try:
+                        # Extract rating
+                        rating_match = re.search(r'rating:\s*(\d+)', block)
+                        rating = int(rating_match.group(1)) if rating_match else None
+                        
+                        # Extract text
+                        text_match = re.search(r"text:\s*'''\s*(.*?)\s*'''", block, re.DOTALL)
+                        text = text_match.group(1).strip() if text_match else ""
+                        
+                        # Extract time
+                        time_match = re.search(r'time:\s*(.*?)$', block, re.MULTILINE)
+                        time_posted = time_match.group(1).strip() if time_match else ""
+                        
+                        # Extract author
+                        author_match = re.search(r'author:\s*(.*?)$', block, re.MULTILINE)
+                        author = author_match.group(1).strip() if author_match else ""
+                        
+                        # Add to reviews list
+                        reviews.append({
+                            'rating': rating,
+                            'text': text,
+                            'time': time_posted,
+                            'author': author
+                        })
+
+                        if len(reviews) >= num_reviews:
+                            break
+                            
+                    except Exception as e:
+                        print(f"Error parsing review block: {str(e)}")
+                        continue
+                
+                print(f"Successfully extracted {len(reviews)} reviews from file")
+                return json.dumps({
+                    'status': 'success',
+                    'restaurant_name': restaurant_name,
+                    'total_reviews': len(reviews),
+                    'reviews': reviews
+                })
+                
+            except Exception as e:
+                print(f"Error reading reviews file: {str(e)}")
+                return json.dumps({
+                    'status': 'error',
+                    'message': f"Error reading reviews file: {str(e)}",
+                    'restaurant_name': restaurant_name,
+                    'reviews': []
+                })
+
+        return Tool.from_function(
+            func=fetch_reviews_from_file,
+            name="ReviewFetchTool",
+            description="Fetches restaurant reviews from a text file. Returns a JSON string with review data."
+        )
+
+
+
+    
     def create_review_filter_tool(self) -> Tool:
         def filter_reviews(reviews_json: str) -> str:
             """
