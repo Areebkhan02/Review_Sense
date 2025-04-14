@@ -357,6 +357,7 @@ class ReviewFetcherAgent:
             
             # Get the file path from environment variable
             reviews_file_path = os.environ.get("REVIEWS_FILE_PATH")
+            print(f"Reviews file path: {reviews_file_path}")
             
             if not reviews_file_path or not os.path.exists(reviews_file_path):
                 print(f"Error: Reviews file not found at {reviews_file_path}")

@@ -56,6 +56,9 @@ agent_advice_system = AgentAdviceAgent(my_llm)
 # Initialize the scheduler
 scheduler = AsyncIOScheduler()
 
+# Add a dictionary to store pre-loaded reviews
+preloaded_reviews = {}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Start scheduler and initialize jobs
@@ -63,16 +66,48 @@ async def lifespan(app: FastAPI):
     #setup_review_reminder_scheduler()
     #setup_inactivity_checker_scheduler()
     
+    # Pre-load reviews for faster demonstration
+    await preload_reviews(RESTAURANT_NAME, NUM_REVIEWS)
+    
     yield  # Server is running and handling requests
     
     # Shutdown: Clean up scheduler
     scheduler.shutdown()
 
+async def preload_reviews(restaurant_name: str, num_reviews: int):
+    """Preload reviews when the server starts"""
+    try:
+        logger.info(f"Preloading reviews for {restaurant_name}")
+        
+        # Run the review workflow
+        crew_output = run_review_workflow(restaurant_name, num_reviews)
+        
+        # Use the tool to process the CrewAI output
+        process_output_tool = whatsapp_system.whatsapp_agent.tools[4]  # Make sure this index is correct
+        processed_json_str = process_output_tool.run(crew_output)
+        
+        # Process the results
+        json_result_original = json.loads(processed_json_str)
+        json_result, removed_count = filter_reviews_by_rating(json_result_original)
+        
+        # Store in global variable for later use
+        global preloaded_reviews
+        preloaded_reviews = {
+            'json_result': json_result,
+            'json_result_original': json_result_original,
+            'removed_count': removed_count
+        }
+        
+        logger.info(f"Successfully preloaded {len(json_result.get('analyzed_reviews', []))} reviews")
+        
+    except Exception as e:
+        logger.error(f"Error in preloading reviews: {str(e)}")
+
 # Create FastAPI app with lifespan
 app = FastAPI(lifespan=lifespan)
 
-RESTAURANT_NAME = 'kfc'
-NUM_REVIEWS = 30
+RESTAURANT_NAME = 'Zareen\'s'
+NUM_REVIEWS = 10
 
 @app.post("/webhook")
 async def whatsapp_webhook(
@@ -102,9 +137,9 @@ async def whatsapp_webhook(
     if intent_response == "CONVERSATION:WELCOME":
         # Send welcome message
         welcome_message = """
-        👋 *Hello Zareen's Manager!*
+        👋 *Hello [Business Owner]!*
         
-        Welcome to Zareen's Restaurant Review Manager. I'm automatically fetching your latest reviews now.
+        Welcome to our Review Manager. I'm automatically fetching your latest reviews now.
         Please wait a moment while I prepare them for your review.
         """
         
@@ -135,7 +170,7 @@ async def whatsapp_webhook(
             )
         
         # Add timer/pause here
-        await asyncio.sleep(40)  # Pause for 3 seconds before showing next review
+        await asyncio.sleep(25)  # Pause for 3 seconds before showing next review
  
         # Move to next review
         current_idx = whatsapp_system.current_indices.get(From, 0)
@@ -152,17 +187,19 @@ async def whatsapp_webhook(
             )
             whatsapp_system.review_states[From] = 'completed'
             summary_data = json.loads(summary)
+
+
+            # *All reviews have been processed!*
+            
+            # *Summary:*
+            # Total Reviews: {summary_data.get('total', 0)}
+            # Approved: {summary_data.get('approved', 0)}
+            
+            # Thank you for reviewing these responses. The approved responses will be sent to customers.
             
             completion_message = f"""
             *No New Reviews Found!*
 
-            *All reviews have been processed!*
-            
-            *Summary:*
-            Total Reviews: {summary_data.get('total', 0)}
-            Approved: {summary_data.get('approved', 0)}
-            
-            Thank you for reviewing these responses. The approved responses will be sent to customers.
             """
             
             whatsapp_system.whatsapp_agent.tools[0].run(
@@ -291,20 +328,28 @@ async def whatsapp_webhook(
 async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num_reviews: int):
     """Background task to fetch and analyze reviews"""
     try:
-        # Run the review workflow
-        crew_output = run_review_workflow(restaurant_name, num_reviews)
-        
-        # Use the tool to process the CrewAI output
-        process_output_tool = whatsapp_system.whatsapp_agent.tools[4]
-          # Make sure this index is correct
-        processed_json_str = process_output_tool.run(crew_output)
-        
-        # Save the results to the WhatsApp agent's state
-        json_result_original = json.loads(processed_json_str)
-        json_result, removed_count = filter_reviews_by_rating(json_result_original)
-
         # Format the phone number correctly for Twilio
         formatted_phone = f"whatsapp:{manager_phone}"
+        
+        # Check if we have preloaded reviews
+        global preloaded_reviews
+        if preloaded_reviews:
+            logger.info("Using preloaded reviews")
+            json_result = preloaded_reviews['json_result']
+            json_result_original = preloaded_reviews['json_result_original']
+            removed_count = preloaded_reviews['removed_count']
+        else:
+            # Run the review workflow if no preloaded reviews exist
+            logger.info("No preloaded reviews, fetching now")
+            crew_output = run_review_workflow(restaurant_name, num_reviews)
+            
+            # Process the output
+            process_output_tool = whatsapp_system.whatsapp_agent.tools[4]  # Make sure index is correct
+            processed_json_str = process_output_tool.run(crew_output)
+            
+            # Save the results
+            json_result_original = json.loads(processed_json_str)
+            json_result, removed_count = filter_reviews_by_rating(json_result_original)
         
         # Initialize the review session
         whatsapp_system.review_data[formatted_phone] = json_result
@@ -323,6 +368,8 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
         pending_reviews = total_reviews - high_rated_reviews
 
         # Send message about review count
+        await asyncio.sleep(6)
+
         review_start_message = f"""
         I've analyzed your recent reviews:
         
@@ -340,7 +387,7 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
         )
         
         # Wait a moment before sending the first review
-        time.sleep(2)
+        await asyncio.sleep(20)
         
         # Send the first review automatically
         if pending_reviews > 0:
