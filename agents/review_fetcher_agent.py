@@ -16,7 +16,8 @@ import re
 
 load_dotenv()
 class ReviewFetcherAgent:
-    def __init__(self, llm):
+    def __init__(self, llm, reviews_file_path=None):
+        self.reviews_file_path = reviews_file_path
         self.fetcher_agent = Agent(
             role='Review Fetching Specialist',
             goal='Fetch and filter recent restaurant reviews, focusing on those requiring attention',
@@ -355,15 +356,26 @@ class ReviewFetcherAgent:
             print(f"Fetching reviews for {restaurant_name} from file")
             reviews = []
             
-            # Get the file path from environment variable
-            reviews_file_path = os.environ.get("REVIEWS_FILE_PATH")
+            # Use the instance variable
+            reviews_file_path = self.reviews_file_path
             print(f"Reviews file path: {reviews_file_path}")
             
-            if not reviews_file_path or not os.path.exists(reviews_file_path):
-                print(f"Error: Reviews file not found at {reviews_file_path}")
+            if not reviews_file_path:
+                error_msg = "Reviews file path not provided to ReviewFetcherAgent"
+                print(f"Error: {error_msg}")
                 return json.dumps({
                     'status': 'error',
-                    'message': f"Reviews file not found at {reviews_file_path}",
+                    'message': error_msg,
+                    'restaurant_name': restaurant_name,
+                    'reviews': []
+                })
+            
+            if not os.path.exists(reviews_file_path):
+                error_msg = f"Reviews file not found at {reviews_file_path}"
+                print(f"Error: {error_msg}")
+                return json.dumps({
+                    'status': 'error',
+                    'message': error_msg,
                     'restaurant_name': restaurant_name,
                     'reviews': []
                 })

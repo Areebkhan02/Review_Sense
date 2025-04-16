@@ -21,9 +21,7 @@ class ResponseGeneratorAgent:
             verbose=True,
             allow_delegation=False,
             llm=llm,
-            tools=[
-                self.create_response_generator_tool()
-            ]
+            tools=[]
         )
 
     def load_response_config(self, config_path=None):
@@ -63,57 +61,6 @@ class ResponseGeneratorAgent:
                 return "ERROR_LOADING_CONFIG: Using default LLM behavior for response generation."
     
         
-    def create_response_generator_tool(self) -> Tool:
-        def generate_responses(analyzed_reviews_json: str) -> str:
-            """
-            Generate personalized human-like responses for each review based on deep analysis
-            
-            Args:
-                analyzed_reviews_json: A JSON string with analyzed review data
-                
-            Returns:
-                str: JSON string with reviews including personalized responses
-            """
-            try:
-                # Parse the incoming JSON
-                data = json.loads(analyzed_reviews_json)
-                
-                # Check if we received an error
-                if isinstance(data, dict) and data.get('status') == 'error':
-                    return analyzed_reviews_json  # Pass through the error
-                
-                # Get restaurant name and analyzed reviews
-                restaurant_name = data.get('restaurant_name', 'our restaurant')
-                reviews = data.get('analyzed_reviews', [])
-                
-                # The response generation will happen within the LLM task execution
-                # This tool just prepares and structures the data
-                return json.dumps({
-                    'status': 'success',
-                    'restaurant_name': restaurant_name,
-                    'total_analyzed_reviews': len(reviews),
-                    'analyzed_reviews': reviews
-                })
-                
-            except json.JSONDecodeError as e:
-                print(f"JSONDecodeError: {str(e)}")
-                return json.dumps({
-                    'status': 'error',
-                    'message': f"Error parsing reviews JSON: {str(e)}"
-                })
-            except Exception as e:
-                print(f"Exception in generate_responses: {str(e)}")
-                return json.dumps({
-                    'status': 'error',
-                    'message': f"Error generating responses: {str(e)}"
-                })
-        
-        return Tool.from_function(
-            func=generate_responses,
-            name="ResponseGeneratorTool",
-            description="Prepares review data for LLM-based response generation. Input should be the JSON string from SentimentAnalysisAgent."
-        )
-    
     def create_response_task(self) -> Task:
         return Task(
             description=f"""

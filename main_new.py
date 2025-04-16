@@ -23,36 +23,7 @@ response_config_path = os.environ.get("RESPONSE_CONFIG_PATH")
 
 
 
-def run_review_workflow(restaurant_name: str = "lalqila", num_reviews: int = 10):
-    """Run the review analysis workflow and return the results"""
-    # Create the agents
-    fetcher_system = ReviewFetcherAgent(my_llm)
-    analysis_system = SentimentAnalysisAgent(my_llm)
-    response_system = ResponseGeneratorAgent(my_llm, response_config_path)
-    
-    # Create the tasks
-    fetcher_task = fetcher_system.create_fetch_task(restaurant_name, num_reviews)
-    analysis_task = analysis_system.create_analysis_task()
-    response_task = response_system.create_response_task()
-    
-    # Create a crew with all agents and sequential tasks
-    crew = Crew(
-        agents=[
-            fetcher_system.fetcher_agent, 
-            analysis_system.analysis_agent,
-            response_system.response_agent
-        ],
-        tasks=[
-            fetcher_task, 
-            analysis_task,
-            response_task
-        ],
-        verbose=True
-    )
 
-    # Execute the complete workflow
-    result = crew.kickoff()
-    return result
 
 def run_approval_workflow(manager_phone: str, reviews_json: str):
     """Run the approval workflow with a WhatsApp agent"""

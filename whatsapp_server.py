@@ -20,9 +20,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from crewai import Crew
 from crewai import Crew, LLM
 from agents.whatsapp_agent import WhatsAppAgent
-from main_new import run_review_workflow
+#from main_new import run_review_workflow
 from agents.response_generator_agent import ResponseGeneratorAgent
 from agents.agent_advice import AgentAdviceAgent
+from agents.sentiment_analysis_agent import SentimentAnalysisAgent
+from agents.response_generator_agent import ResponseGeneratorAgent
+from agents.review_fetcher_agent import ReviewFetcherAgent
 
 # Load environment variables
 load_dotenv()
@@ -39,6 +42,7 @@ my_llm = LLM(
 
 #configuration for response templates
 response_config_path = os.environ.get("RESPONSE_CONFIG_PATH")
+reviews_file_path = os.environ.get("REVIEWS_FILE_PATH")
 #print(f"Response config path: {response_config_path}")
 
 # Initialize the MongoDB client
@@ -46,14 +50,9 @@ response_config_path = os.environ.get("RESPONSE_CONFIG_PATH")
 
 # Initialize the WhatsApp agent - this is PERSISTENT across requests
 whatsapp_system = WhatsAppAgent(my_llm)
-
-# Initialize the response generator agent
 response_system = ResponseGeneratorAgent(my_llm, response_config_path)
-
-# Initialize the agent advice agent
 agent_advice_system = AgentAdviceAgent(my_llm)
-
-# Initialize the scheduler
+#
 scheduler = AsyncIOScheduler()
 
 # Add a dictionary to store pre-loaded reviews
@@ -83,7 +82,7 @@ async def preload_reviews(restaurant_name: str, num_reviews: int):
         crew_output = run_review_workflow(restaurant_name, num_reviews)
         
         # Use the tool to process the CrewAI output
-        process_output_tool = whatsapp_system.whatsapp_agent.tools[4]  # Make sure this index is correct
+        process_output_tool = whatsapp_system.whatsapp_agent.tools[3]  #3 Make sure this index is correct
         processed_json_str = process_output_tool.run(crew_output)
         
         # Process the results
@@ -148,9 +147,9 @@ async def whatsapp_webhook(
             message=welcome_message
         )
         
-        # Save to memory
-        memory = whatsapp_system.get_user_memory(From)
-        memory.save_context({"input": Body}, {"output": welcome_message})
+        # # Save to memory
+        # memory = whatsapp_system.get_user_memory(From)
+        # memory.save_context({"input": Body}, {"output": welcome_message})
         
         # Automatically start fetching reviews in the background
         background_tasks.add_task(
@@ -344,7 +343,7 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
             crew_output = run_review_workflow(restaurant_name, num_reviews)
             
             # Process the output
-            process_output_tool = whatsapp_system.whatsapp_agent.tools[4]  # Make sure index is correct
+            process_output_tool = whatsapp_system.whatsapp_agent.tools[3]  #3 Make sure index is correct
             processed_json_str = process_output_tool.run(crew_output)
             
             # Save the results
@@ -411,6 +410,9 @@ async def fetch_reviews_background(manager_phone: str, restaurant_name: str, num
         
         return {"status": "error", "message": str(e)}
 
+
+
+#-------------- helper functions --------------
 def send_review_for_approval(whatsapp_system, user_phone, review_idx):
     """Send a review for approval without buttons or review numbering"""
     reviews = whatsapp_system.review_data.get(user_phone, {}).get('analyzed_reviews', [])
@@ -443,6 +445,43 @@ def send_review_for_approval(whatsapp_system, user_phone, review_idx):
         return True
     return False
 
+
+def run_review_workflow(restaurant_name: str = "lalqila", num_reviews: int = 10):
+    """Run the review analysis workflow and return the results"""
+    # Get reviews file path from environment
+    
+    
+    # Create the agents
+    fetcher_system = ReviewFetcherAgent(my_llm, reviews_file_path)
+    analysis_system = SentimentAnalysisAgent(my_llm)
+    response_system = ResponseGeneratorAgent(my_llm, response_config_path)
+    
+    # Create the tasks
+    fetcher_task = fetcher_system.create_fetch_task(restaurant_name, num_reviews)
+    analysis_task = analysis_system.create_analysis_task()
+    response_task = response_system.create_response_task()
+    
+    # Create a crew with all agents and sequential tasks
+    crew = Crew(
+        agents=[
+            fetcher_system.fetcher_agent, 
+            analysis_system.analysis_agent,
+            response_system.response_agent
+        ],
+        tasks=[
+            fetcher_task, 
+            analysis_task,
+            response_task
+        ],
+        verbose=True
+    )
+
+    # Execute the complete workflow
+    result = crew.kickoff()
+    return result
+
+
+# --------------------        reminders and schedulars
 async def send_review_reminder(manager_phone: str):
     """Send a reminder to complete pending reviews"""
     formatted_phone = f"whatsapp:{manager_phone}"
